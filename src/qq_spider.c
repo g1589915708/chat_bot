@@ -935,79 +935,89 @@ char * _QQ_SPIDER_ convert_code(const char* tocode, const char* fromcode, const 
 
 qq_message* _QQ_SPIDER_ match_command(const char* command, const char* msg)
 {
-    qq_message* res = NULL;
-	 printf(" PCRE 2 库  应用实例:\n\n");
-	 int error_code = 0;
-	 PCRE2_SIZE error_offset = 0;
-	 int nOptions =  0;  
-	 // const char *pError;  
-	 //const char * strOrg2 = "I am hk!";
-	 //const char * strRex2 = "\\b\\w+\\b";
-	 const char * strOrg2 = msg;
-	 const char * strRex2 = command;
+    qq_message* res = NULL,*note = NULL,*tmp = NULL;
+    cJSON *root = NULL;
+    
+	int error_code = 0;
+	PCRE2_SIZE error_offset = 0;
+	int nOptions =  0;  
+	const char * strOrg2 = msg;
+	const char * strRex2 = command;
+	pcre2_code *recm;
+	pcre2_match_data *match_data;
+	int rc2 = 0;
+	int start_offset = 0;
+	unsigned int match_index = 0;
+	PCRE2_SIZE *ovector;
+	int i = 0;
+	char *substring_start;
+	int substring_length;
+	char matched[1024];
 	 
-	 printf("字符串是 : %s\n", strOrg2);
-	 printf("正则表达式是: %s\n\n\n", strRex2);
-	 //going to compile the regular expression pattern, and handle  any errors that are detected
-	 pcre2_code *recm = pcre2_compile((PCRE2_SPTR)strRex2, PCRE2_ZERO_TERMINATED, 0 , &error_code, &error_offset, NULL);
-	 //Compilation failed: print the error message and exit
-	 if (recm == NULL)
-	 {
-	     PCRE2_UCHAR buffer[256];
-	     pcre2_get_error_message(error_code, buffer, sizeof(buffer));
-	     printf("PCRE2 compilation failed at offset %d: %s\n", (int)error_offset,buffer);
-	     return 1;
-	 }
-	 // Using this function ensures that the block is exactly the right size for the number of capturing parentheses in the pattern.
-	 pcre2_match_data *match_data = pcre2_match_data_create_from_pattern(recm, NULL);
-	 int rc2 = 0;
-	 int start_offset = 0;
-	 unsigned int match_index = 0;
-	 rc2= pcre2_match(recm, (PCRE2_SPTR)strOrg2, strlen(strOrg2), start_offset, 0, match_data, NULL);
-  //if(rc < 0)
-  //{
-  // 
-  //}
-  //else
-  //{
-  // int pos = start_offset;
- 
-  // while ((rc = pcre2_match(re, reinterpret_cast<PCRE2_SPTR>(strStruff.c_str()), strStruff.length(), start_offset, 0, match_data, NULL)) > 0)
-  // {
-  //  pos = start_offset;
-  // }
-  //}
-  if (rc2 < 0){
-      
-      switch(rc2){
-          case PCRE2_ERROR_NOMATCH: printf("No match\n"); break;
-          /*Handle other special cases if you like */
-          default: printf("Matching error %d\n", rc2); break;
-      }
-      pcre2_match_data_free(match_data);   /* Release memory used for the match */
-      pcre2_code_free(recm);                 /* data and the compiled pattern. */
-      return 1;
-      
-  }
-  //going to compile the regular expression pattern, and handle  any errors that are detected
-  while ((rc2 = pcre2_match(recm, (PCRE2_SPTR)strOrg2, strlen(strOrg2), start_offset, 0, match_data, NULL)) > 0){
-      //Match succeded. Get a pointer to the output vector, where string offsets are stored. 
-      PCRE2_SIZE *ovector = pcre2_get_ovector_pointer(match_data);
-      int i = 0;
-      for (i = 0; i < rc2; i++) { 
-          char *substring_start = (char *)strOrg2+ ovector[2*i]; 
-          int substring_length = ovector[2*i+1] - ovector[2*i]; 
-          char matched[1024]; 
-          memset( matched, 0, 1024 ); 
-          strncpy( matched, substring_start, substring_length ); 
-          printf( "全部匹配结果有  :%s\n",matched ); 
-      } 
-      start_offset = ovector[2*(i-1) + 1];
-      if ( strOrg2[start_offset] == '\0'){ break; }
-  }
-  pcre2_match_data_free(match_data);
-  pcre2_code_free(recm);
-  return res;
+	 
+#ifdef _DEBUG
+	printf(" PCRE 2 库  应用实例:\n\n");
+	printf("字符串是 : %s\n", strOrg2);
+	printf("正则表达式是: %s\n\n\n", strRex2);
+#endif
+	//going to compile the regular expression pattern, and handle  any errors that are detected
+	recm = pcre2_compile((PCRE2_SPTR)strRex2, PCRE2_ZERO_TERMINATED, 0 , &error_code, &error_offset, NULL);
+	//Compilation failed: print the error message and exit
+	if (recm == NULL)
+	{
+	    PCRE2_UCHAR buffer[256];
+	    pcre2_get_error_message(error_code, buffer, sizeof(buffer));
+	    printf("PCRE2 compilation failed at offset %d: %s\n", (int)error_offset,buffer);
+	    return NULL;
+	}
+	// Using this function ensures that the block is exactly the right size for the number of capturing parentheses in the pattern.
+	match_data = pcre2_match_data_create_from_pattern(recm, NULL);
+
+	rc2= pcre2_match(recm, (PCRE2_SPTR)strOrg2, strlen(strOrg2), start_offset, 0, match_data, NULL);
+	if (rc2 < 0){
+	    switch(rc2){
+	        case PCRE2_ERROR_NOMATCH: printf("No match\n"); break;
+	        /*Handle other special cases if you like */
+	        default: printf("Matching error %d\n", rc2); break;
+	    }
+	    pcre2_match_data_free(match_data);   /* Release memory used for the match */
+	    pcre2_code_free(recm);                 /* data and the compiled pattern. */
+	    return NULL;
+	}
+	//going to compile the regular expression pattern, and handle  any errors that are detected
+	do{
+	    //Match succeded. Get a pointer to the output vector, where string offsets are stored. 
+	    ovector = pcre2_get_ovector_pointer(match_data);
+        for (i = 0; i < rc2; i++) { 
+            substring_start = (char *)strOrg2+ ovector[2*i]; 
+            substring_length = ovector[2*i+1] - ovector[2*i]; 
+            memset( matched, 0, 1024 ); 
+            strncpy( matched, substring_start, substring_length ); 
+            root = cJSON_Parse(matched);
+            if(root != NULL && res != NULL){
+                tmp = parse_qmessage(root);
+                note->next = tmp;
+                note = note->next;
+            }else if(root != NULL && res == NULL){
+                note = parse_qmessage(root);
+                res = note;
+            }else{
+#ifdef _DEBUG
+                printf("current json wrong format!");
+#else
+                return NULL;
+#endif
+            }
+#ifdef _DEBUG
+            printf( "全部匹配结果有  :%s\n",matched ); 
+#endif
+        } 
+        start_offset = ovector[2*(i-1) + 1];
+        if ( strOrg2[start_offset] == '\0'){ break; }
+	}while ((rc2 = pcre2_match(recm, (PCRE2_SPTR)strOrg2, strlen(strOrg2), start_offset, 0, match_data, NULL)) > 0);
+	pcre2_match_data_free(match_data);      /* Release memory used for the match */
+	pcre2_code_free(recm);                  /* data and the compiled pattern. */
+	return res;
 }
 
 
@@ -1039,7 +1049,8 @@ int main()
     get_friend_profile(&curl, qq, 1589915708);
     get_member_list(&curl, qq, 548590128);
     res = send_message(&curl, qq, 1589915708, message);
-    match_command("\\b\\w+\\b","I am hk!");
+    //match_command("\\b\\w+\\b","I am hk!");
+    match_command("\\b\\w+\\d{2}\\b","I12 am23 hk23!");
     
     do{
         printf("continue?...\t\t yes/no\n");
