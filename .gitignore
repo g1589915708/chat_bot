@@ -3,3 +3,8 @@
 *.out
 *.lib
 *.dll
+**/*.sh
+**/*.so
+**/*.out
+**/*.lib
+**/*.dll
