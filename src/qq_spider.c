@@ -553,7 +553,6 @@ int _QQ_SPIDER_ parsing_events_information(const char* data, qq_spider** pbot)
     char m[512] = { 0 };
     char* tmp;
     int ret = 0;
-
     root = cJSON_Parse(data);
     if (root == NULL) return NULL;
     /* 获得事件和信息的总和 */
@@ -1093,9 +1092,10 @@ int test(CURL** cd,qq_spider * qq,int time) {
         char* new = get_new_unread_information(cd, qq, 10);
         printf("new=%s\n\n\n",new);
         //parsing_events_information(cd, qq, old);
+
         printf("qq->mcount==%d\n\n\n", qq->mcount);
-        parsing_events_information(old, &qq);
         parsing_events_information(new, &qq);
+        parsing_events_information(old, &qq);
         printf("qq->mcount==%d\n\n\n", qq->mcount);
         char * mg = NULL;
         if(qq->lately_message != NULL){ 
