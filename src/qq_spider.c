@@ -22,6 +22,7 @@ static char* transcoding(const char* tocode, const char* fromcode, const char* i
 static qq_friend* parse_qq_friend(cJSON* root);
 static qq_group* parse_qq_group(cJSON* root);
 static qq_group_member* parse_qq_group_member(cJSON* root);
+static qq_message* parse_qmessage_item(cJSON * root);
 static qq_message* parse_qmessage(cJSON * root);
 
 qq_spider* _QQ_SPIDER_ init_qq_spider(CURL** curl,const char* ip, int port,const char* aKey, size_t qnumber)
@@ -558,9 +559,9 @@ int _QQ_SPIDER_ parsing_events_information(const char* data, qq_spider** pbot)
     /* 获得事件和信息的总和 */
     size = cJSON_GetArraySize(root);
     if (size == 0) return NULL;
-    bot->lately_message = malloc(sizeof(qq_message*) * size);
+    bot->lately_message == NULL ? bot->lately_message = calloc(sizeof(qq_message*), size) : (bot->lately_message = realloc(bot->lately_message,sizeof(qq_message*) * (size + bot->mcount)));
     if (bot->lately_message == NULL) return -1;
-    bot->lately_event = malloc(sizeof(qq_event) * size);
+    bot->lately_event == NULL ? bot->lately_event = calloc(sizeof(qq_event), size) : (bot->lately_event = realloc(bot->lately_event,sizeof(qq_event) * (size + bot->ecount)));
     if (bot->lately_event == NULL) { free(bot->lately_message); return -1; }
     /* 解析事件和信息 */
     for (i = 0; i < size; i++)
@@ -587,7 +588,7 @@ int _QQ_SPIDER_ parsing_events_information(const char* data, qq_spider** pbot)
             qf = NULL;
             bot->ecount++;
         }
-        else if (strcmp(tmp, "BotGroupPermissionChangeEvent") == 0 || strcmp(tmp, "BotJoinGroupEvent") == 0 || strcmp(tmp, "BotLeaveEventActive") == 0 || strcmp(tmp, "BotLeaveEventKick") == 0 || strcmp(tmp, "GroupAllowConfessTalkEvent") == 0) {//如果是Bot在群里的权限被改变
+        else if (strcmp(tmp, "BotGroupPermissionChangeEvent") == 0 || strcmp(tmp, "BotLeaveEventActive") == 0 || strcmp(tmp, "GroupAllowConfessTalkEvent") == 0) {//如果是Bot在群里的权限被改变
             /* OWNER、ADMINISTRATOR或MEMBER */
             strcpy(bot->lately_event[bot->ecount].str_type, tmp);
             qg = parse_qq_group(cJSON_GetObjectItem(object, "group"));
@@ -605,7 +606,7 @@ int _QQ_SPIDER_ parsing_events_information(const char* data, qq_spider** pbot)
                     bot->lately_event[bot->ecount].event.gevent.isBot = item->valueint;
                 }
             }
-            else {
+            else if (item && item->type <= 1) {
                 bot->lately_event[bot->ecount].event.gevent.author_id = cJSON_GetObjectItem(object, "authorId")->valuedouble;
                 bot->lately_event[bot->ecount].event.gevent.message_id = cJSON_GetObjectItem(object, "messageId")->valuedouble;
                 bot->lately_event[bot->ecount].event.gevent.time = cJSON_GetObjectItem(object, "time")->valuedouble;
@@ -614,6 +615,23 @@ int _QQ_SPIDER_ parsing_events_information(const char* data, qq_spider** pbot)
             qg = NULL;
             bot->ecount++;
         }
+	else if (strcmp(tmp, "BotJoinGroupEvent") == 0 || strcmp(tmp, "BotLeaveEventKick") == 0 ){
+		strcpy(bot->lately_event[bot->ecount].str_type, tmp);
+		qg = parse_qq_group(cJSON_GetObjectItem(object, "group"));
+		memcpy(&bot->lately_event[bot->ecount].event.gevent.qg, qg, sizeof(qq_group));
+		if(cJSON_GetObjectItem(object, "operator") != NULL){
+	printf("oh no!!\n");
+			qm = parse_qq_group_member(cJSON_GetObjectItem(object, "operator"));
+		}else if(cJSON_GetObjectItem(object, "invitor") != NULL){
+	printf("oh yes!!\n");
+			qm = parse_qq_group_member(cJSON_GetObjectItem(object, "invitor"));
+		}
+		if(qm){
+			memcpy(&bot->lately_event[bot->ecount].event.gevent.operat, qm, sizeof(qq_group_member));
+            		free(qm);
+		}
+		free(qg);
+	} 
         else if (strcmp(tmp, "BotMuteEvent") == 0 || strcmp(tmp, "BotUnmuteEvent") == 0 || strcmp(tmp, "MemberJoinEvent") == 0 || strcmp(tmp, "MemberLeaveEventQuit") == 0 || strcmp(tmp, "MemberCardChangeEvent") == 0 || strcmp(tmp, "MemberSpecialTitleChangeEvent") == 0 || strcmp(tmp, "MemberPermissionChangeEvent") == 0 || strcmp(tmp, "MemberHonorChangeEvent") == 0) {
             strcpy(bot->lately_event[bot->ecount].str_type, tmp);
             qm = parse_qq_group_member(cJSON_GetObjectItem(object, "operator"));
@@ -999,7 +1017,7 @@ qq_message* _QQ_SPIDER_ match_command(const char* command, const char* msg)
                 note->next = tmp;
                 note = note->next;
             }else if(root != NULL && res == NULL){
-                note = parse_qmessage(root);
+                note = parse_qmessage_item(root);
                 res = note;
             }else{
 #ifdef _DEBUG
@@ -1066,6 +1084,7 @@ int main()
 
 int test(CURL** cd,qq_spider * qq,int time) {
 	int i = 0;
+	char mam[32] = { 0 };
     while (true) {
         int ret = unread_message_number(cd, qq);
         printf("ret=%d\n\n\n",ret);
@@ -1096,6 +1115,16 @@ int test(CURL** cd,qq_spider * qq,int time) {
 		qq->mcount = 0;
 	}
 	printf("qq->mcount==%d\n\n\n", qq->mcount);
+	
+	printf("continue?...  (Y/N)");
+	if(mam[0] != NULL && strcmp(mam,"AUTO YES") != 0)	scanf("%s",mam);
+	if(strcmp(mam,"YES") == 0){
+		continue;
+	}else if(strcmp(mam,"AUTO YES") == 0){
+		
+	}else if(strcmp(mam,"NO") == 0){
+		break;
+	}
 #ifdef _WIN32
         Sleep(time);
 #endif
@@ -1205,6 +1234,188 @@ qq_group_member* parse_qq_group_member(cJSON* root)
     return member;
 }
 
+qq_message* parse_qmessage_item(cJSON* root)
+{    
+    qq_message* msg = NULL, * tem = NULL,*head = NULL;
+    int size = 0;
+    int i = 0,j = 0;
+    int itemp = 0;
+    cJSON* type = NULL, * item = NULL, *ctemp = NULL;
+    /* source */
+    cJSON* id = NULL, * time = NULL;
+    cJSON* base64;
+    
+    msg = malloc(sizeof(qq_message));
+    if(msg == NULL) return NULL;
+    memset(msg, 0, sizeof(qq_message));
+    head = msg;
+
+    item = root;
+    type = cJSON_GetObjectItem(item, "type");
+    printf("-------------\n");
+    if (strcmp(type->valuestring, "Source") == 0) {
+        msg->type = QSOURCE;
+        msg->message.source.id = cJSON_GetObjectItem(item, "id")->valuedouble;
+        msg->message.source.time = cJSON_GetObjectItem(item, "time")->valuedouble;
+    }
+    else if (strcmp(type->valuestring, "Quote") == 0)
+    {
+        msg->type = QQUOTE;
+        msg->message.quote.id = cJSON_GetObjectItem(item, "id")->valuedouble;
+        msg->message.quote.group_id = cJSON_GetObjectItem(item, "groupId")->valuedouble;
+        msg->message.quote.sender_id = cJSON_GetObjectItem(item, "senderId")->valuedouble;
+        msg->message.quote.target_id = cJSON_GetObjectItem(item, "targetId")->valuedouble;
+        msg->child = parse_qmessage(cJSON_GetObjectItem(item, "origin"));
+    }
+    else if (strcmp(type->valuestring, "At") == 0)
+    {
+        msg->type = QAT;
+        msg->message.at.target = cJSON_GetObjectItem(item, "target")->valuedouble;
+        strcpy(msg->message.at.display, cJSON_GetObjectItem(item, "display")->valuestring);
+    }
+    else if (strcmp(type->valuestring, "Face") == 0)
+    {
+        msg->type = QFACE;
+        msg->message.face.id = cJSON_GetObjectItem(item, "faceId")->valuedouble;
+        strcpy(msg->message.face.name, cJSON_GetObjectItem(item, "name")->valuestring);
+    }
+    else if (strcmp(type->valuestring, "Plain") == 0)
+    {
+        msg->type = QPLAIN;
+        msg->message.curr.length = strlen(cJSON_GetObjectItem(item, "text")->valuestring) + 1;
+        msg->message.curr.text = malloc(msg->message.curr.length * sizeof(char));
+        if (msg->message.curr.text == NULL) { free(msg); printf("funtion :%s   line: %d malloc failed!!!",__FUNCTION__,__LINE__); return NULL; }
+        strcpy(msg->message.curr.text, cJSON_GetObjectItem(item, "text")->valuestring);
+    }
+    else if (strcmp(type->valuestring, "Image") == 0 || strcmp(type->valuestring, "FlashImage") == 0 || strcmp(type->valuestring, "Voice") == 0)
+    {
+        msg->type = QIMAGE;
+        base64 = cJSON_GetObjectItem(item, "base64");
+        if (base64->type != 2) {
+            msg->message.image.length = strlen(cJSON_GetObjectItem(item, "base64")->valuestring) + 1;
+            msg->message.image.base64 = malloc(msg->message.curr.length * sizeof(char));
+            if (msg->message.image.base64 == NULL) { free(msg); printf("funtion :%s   line: %d malloc failed!!!",__FUNCTION__,__LINE__); return NULL; }
+            strcpy(msg->message.image.base64, cJSON_GetObjectItem(item, "base64")->valuestring);
+        }
+        strcpy(msg->message.image.image_id, cJSON_GetObjectItem(item, "imageId")->valuestring);
+        if(cJSON_GetObjectItem(item, "url")->type != 2)    strcpy(msg->message.image.url, cJSON_GetObjectItem(item, "url")->valuestring);
+        if(cJSON_GetObjectItem(item, "path")->type != 2)    strcpy(msg->message.image.path, cJSON_GetObjectItem(item, "path")->valuestring);
+    }
+    else if (strcmp(type->valuestring, "Xml") == 0 )
+    {
+        msg->type = QXML ;
+        msg->message.curr.length = strlen(cJSON_GetObjectItem(item, "xml")->valuestring) + 1;
+        msg->message.curr.text = malloc(msg->message.curr.length * sizeof(char));
+        if (msg->message.curr.text == NULL) { free(msg); printf("funtion :%s   line: %d malloc failed!!!",__FUNCTION__,__LINE__); return NULL; }
+        strcpy(msg->message.curr.text, cJSON_GetObjectItem(item, "xml")->valuestring);
+    }
+
+    else if (strcmp(type->valuestring, "Json") == 0)
+    {
+        msg->type = QJSON ;
+        msg->message.curr.length = strlen(cJSON_GetObjectItem(item, "Json")->valuestring) + 1;
+        msg->message.curr.text = malloc(msg->message.curr.length * sizeof(char));
+        if (msg->message.curr.text == NULL) { free(msg); printf("funtion :%s   line: %d malloc failed!!!",__FUNCTION__,__LINE__); return NULL; }
+        strcpy(msg->message.curr.text, cJSON_GetObjectItem(item, "Json")->valuestring);
+    }
+    else if (strcmp(type->valuestring, "App") == 0 )
+    {
+        msg->type = QAPP;
+        msg->message.curr.length = strlen(cJSON_GetObjectItem(item, "App")->valuestring) + 1;
+        msg->message.curr.text = malloc(msg->message.curr.length * sizeof(char));
+            if (msg->message.curr.text == NULL) { free(msg); printf("funtion :%s   line: %d malloc failed!!!",__FUNCTION__,__LINE__); return NULL; }
+        strcpy(msg->message.curr.text, cJSON_GetObjectItem(item, "App")->valuestring);
+    }
+    else if ( strcmp(type->valuestring, "Poke") == 0)
+    {
+        msg->type = QPOKE;
+        msg->message.curr.length = strlen(cJSON_GetObjectItem(item, "Poke")->valuestring) + 1;
+        msg->message.curr.text = malloc(msg->message.curr.length * sizeof(char));
+        if (msg->message.curr.text == NULL) { free(msg); printf("funtion :%s   line: %d malloc failed!!!",__FUNCTION__,__LINE__); return NULL; }
+        strcpy(msg->message.curr.text, cJSON_GetObjectItem(item, "Poke")->valuestring);
+    }
+    else if (strcmp(type->valuestring, "Dice") == 0)
+    {
+        msg->type = QDICE;
+        msg->message.curr.length = cJSON_GetObjectItem(item, "Dice")->valuedouble;
+    }
+    else if (strcmp(type->valuestring, "MusicShare") == 0)
+    {
+        msg->type = QIMAGE;
+        strcpy(msg->message.music.kind, cJSON_GetObjectItem(item, "kind")->valuestring);
+        strcpy(msg->message.music.title, cJSON_GetObjectItem(item, "title")->valuestring);
+        strcpy(msg->message.music.summary, cJSON_GetObjectItem(item, "summary")->valuestring);
+        strcpy(msg->message.music.jump_url, cJSON_GetObjectItem(item, "jumpUrl")->valuestring);
+        strcpy(msg->message.music.picture_url, cJSON_GetObjectItem(item, "pictureUrl")->valuestring);
+        strcpy(msg->message.music.music_url, cJSON_GetObjectItem(item, "musicUrl")->valuestring);
+        strcpy(msg->message.music.brief, cJSON_GetObjectItem(item, "brief")->valuestring);
+    }
+    else if (strcmp(type->valuestring, "Forward") == 0)
+    {
+        msg->type = QFORWARDMESSAGE;
+        itemp = cJSON_GetArraySize(cJSON_GetObjectItem(item, "nodeList"));
+        item = cJSON_GetObjectItem(item, "nodeList");
+        if (itemp <= 0) { free(msg); printf("funtion :%s   line: %d forward message <= 0!!!",__FUNCTION__,__LINE__); return NULL; }
+        msg->child = malloc(sizeof(qq_message));
+        if (msg->child == NULL) {
+            tem = msg->prev;
+            while (msg->prev != NULL)
+            {
+                if (msg->prev != NULL) tem = msg->prev;
+                else break;
+                free(msg);
+                msg = tem;
+            }
+            return -1;
+        }
+        memset(msg->child, 0, sizeof(qq_message));
+        tem = msg;
+        msg = msg->child;
+        msg->prev = tem;
+        for (j = 0; j < itemp; j++)
+        {
+            ctemp = cJSON_GetArrayItem(item, j);
+            msg->message.forward.sender_id = cJSON_GetObjectItem(ctemp, "senderId")->valuedouble;
+            msg->message.forward.time = cJSON_GetObjectItem(ctemp, "time")->valuedouble;
+            msg->message.forward.source_id = cJSON_GetObjectItem(ctemp, "sourceId") == NULL ? 0 : cJSON_GetObjectItem(ctemp, "sourceId")->valuedouble;
+            strcpy(msg->message.forward.sender_name, cJSON_GetObjectItem(ctemp, "senderName")->valuestring);
+            msg->child = parse_qmessage(cJSON_GetObjectItem(ctemp, "messageChain"));
+            if (j != item - 1) {
+                msg->next = malloc(sizeof(qq_message));
+                if (msg->next == NULL) {
+                    tem = msg->prev;
+                    while (msg->prev != NULL)
+                    {
+                        if (msg->prev != NULL) tem = msg->prev;
+                        else break;
+                        free(msg);
+                        msg = tem;
+                    }
+                    return -1;
+                }
+                memset(msg->next, 0, sizeof(qq_message));
+                msg->next->prev = msg;
+                msg = msg->next;
+            }
+        }
+        msg = tem;
+    }
+    else if (strcmp(type->valuestring, "File") == 0)
+    {
+        msg->type = QFILE;
+        msg->message.curr.length = strlen(cJSON_GetObjectItem(item, "name")->valuestring);
+        msg->message.curr.text = malloc(msg->message.curr.length * sizeof(char));
+        if (msg->message.curr.text == NULL) { free(msg); printf("funtion :%s   line: %d malloc failed!!!",__FUNCTION__,__LINE__); return NULL; }
+        strcpy(msg->message.curr.text, cJSON_GetObjectItem(item, "text")->valuestring);
+        msg->message.curr.id = cJSON_GetObjectItem(item, "id")->valuedouble;
+        msg->message.curr.size = cJSON_GetObjectItem(item, "size")->valuedouble;
+    }
+    
+    msg = head;
+    return msg;
+    
+}
+
 qq_message* parse_qmessage(cJSON* root)
 {
     qq_message* msg = NULL, * tem = NULL,*head = NULL;
@@ -1221,8 +1432,7 @@ qq_message* parse_qmessage(cJSON* root)
     memset(msg, 0, sizeof(qq_message));
     head = msg;
 
-    size = cJSON_GetArraySize(root);
-    if (size == 0) { free(msg); msg = NULL;  return msg; }
+    if (cJSON_IsArray(root) != 1 || (size = cJSON_GetArraySize(root)) <= 0) { free(msg); msg = NULL;  return msg; }
     for (i = 0; i < size; i++)
     {
         item = cJSON_GetArrayItem(root, i);
@@ -1453,3 +1663,4 @@ qq_message* parse_qmessage(cJSON* root)
 //    cJSON_Delete(root);
 //    return NULL;
 //}
+
