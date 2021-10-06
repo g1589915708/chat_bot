@@ -543,6 +543,7 @@ int _QQ_SPIDER_ parsing_events_information(const char* data, qq_spider** pbot)
 {
     cJSON* root = NULL, * object = NULL, * sender = NULL, * messageChain = NULL, * message = NULL, * group = NULL;
     cJSON* item = NULL;
+    cJSON* ctmp = NULL;
     qq_spider* bot = *pbot;
     qq_friend* qf = NULL;
     qq_group* qg = NULL;
@@ -553,12 +554,15 @@ int _QQ_SPIDER_ parsing_events_information(const char* data, qq_spider** pbot)
     char m[512] = { 0 };
     char* tmp;
     int ret = 0;
+    printf("%s\n",data);
     root = cJSON_Parse(data);
     if (root == NULL) return NULL;
     /* 获得事件和信息的总和 */
     size = cJSON_GetArraySize(root);
     if (size == 0) return NULL;
-    bot->lately_message == NULL ? bot->lately_message = calloc(sizeof(qq_message*), size) : (bot->lately_message = realloc(bot->lately_message,sizeof(qq_message*) * (size + bot->mcount)));
+    bot->lately_message == NULL ? 
+	bot->lately_message = calloc(sizeof(qq_message*), size) : 
+	(bot->lately_message = realloc(bot->lately_message,sizeof(qq_message*) * (size + bot->mcount)));//bug1
     if (bot->lately_message == NULL) return -1;
     bot->lately_event == NULL ? bot->lately_event = calloc(sizeof(qq_event), size) : (bot->lately_event = realloc(bot->lately_event,sizeof(qq_event) * (size + bot->ecount)));
     if (bot->lately_event == NULL) { free(bot->lately_message); return -1; }
@@ -633,8 +637,15 @@ int _QQ_SPIDER_ parsing_events_information(const char* data, qq_spider** pbot)
 	} 
         else if (strcmp(tmp, "BotMuteEvent") == 0 || strcmp(tmp, "BotUnmuteEvent") == 0 || strcmp(tmp, "MemberJoinEvent") == 0 || strcmp(tmp, "MemberLeaveEventQuit") == 0 || strcmp(tmp, "MemberCardChangeEvent") == 0 || strcmp(tmp, "MemberSpecialTitleChangeEvent") == 0 || strcmp(tmp, "MemberPermissionChangeEvent") == 0 || strcmp(tmp, "MemberHonorChangeEvent") == 0) {
             strcpy(bot->lately_event[bot->ecount].str_type, tmp);
-            qm = parse_qq_group_member(cJSON_GetObjectItem(object, "operator"));
-            memcpy(&bot->lately_event[bot->ecount].event.gevent.operat, qm, sizeof(qq_group_member));
+	    ctmp = cJSON_GetObjectItem(object, "operator");
+	    if(ctmp == NULL) ctmp = cJSON_GetObjectItem(object, "member");
+	    if(ctmp == NULL) { printf("program error!!  funtion:%s,line:%d\n",__FUNCTION__,__LINE__); }
+            qm = parse_qq_group_member(ctmp);
+	    if(qm != NULL){
+		memcpy(&bot->lately_event[bot->ecount].event.gevent.operat, qm, sizeof(qq_group_member));
+		free(qm);
+		qm = NULL;
+	    }
             item = cJSON_GetObjectItem(object, "durationSeconds");
             if (item != NULL) { bot->lately_event[bot->ecount].event.gevent.duration_seconds = item->valuedouble; }
             else { 
@@ -644,13 +655,11 @@ int _QQ_SPIDER_ parsing_events_information(const char* data, qq_spider** pbot)
                     strcpy(bot->lately_event[bot->ecount].event.gevent.origin, item->valuestring);
                     strcpy(bot->lately_event[bot->ecount].event.gevent.current, cJSON_GetObjectItem(object, "current")->valuestring);
                 }
-                else {
+                else if(cJSON_GetObjectItem(object, "action") != NULL){
                     strcpy(bot->lately_event[bot->ecount].event.gevent.action, cJSON_GetObjectItem(object, "action")->valuestring);
                     strcpy(bot->lately_event[bot->ecount].event.gevent.honor, cJSON_GetObjectItem(object, "honor")->valuestring);
                 }
             }
-            free(qm);
-            qm = NULL;
             bot->ecount++;
         }
         else if (strcmp(tmp, "MemberLeaveEventKick") == 0 || strcmp(tmp, "MemberMuteEvent") == 0 || strcmp(tmp, "MemberUnmuteEvent") == 0) {//如果是成员被踢出群（该成员不是Bot）
