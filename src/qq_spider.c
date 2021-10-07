@@ -732,6 +732,7 @@ int _QQ_SPIDER_ parsing_events_information(const char* data, qq_spider** pbot)
             free(fend);
         }
         else if (strcmp(tmp, "GroupMessage") == 0 || strcmp(tmp, "TempMessage") == 0) {//如果是群消息撤回
+	    printf("735:%s\n",cJSON_Print(cJSON_GetObjectItem(object, "messageChain")));
             qq_message* message = parse_qmessage(cJSON_GetObjectItem(object, "messageChain"));
             qq_group_member* member;
             bot->lately_message[bot->mcount] = message;
@@ -1300,15 +1301,15 @@ qq_message* parse_qmessage_item(cJSON* root)
     {
         msg->type = QIMAGE;
         base64 = cJSON_GetObjectItem(item, "base64");
-        if (base64->type != 2) {
+        if (!cJSON_IsNull(base64)) {
             msg->message.image.length = strlen(cJSON_GetObjectItem(item, "base64")->valuestring) + 1;
             msg->message.image.base64 = malloc(msg->message.curr.length * sizeof(char));
             if (msg->message.image.base64 == NULL) { free(msg); printf("funtion :%s   line: %d malloc failed!!!",__FUNCTION__,__LINE__); return NULL; }
             strcpy(msg->message.image.base64, cJSON_GetObjectItem(item, "base64")->valuestring);
         }
         strcpy(msg->message.image.image_id, cJSON_GetObjectItem(item, "imageId")->valuestring);
-        if(cJSON_GetObjectItem(item, "url")->type != 2)    strcpy(msg->message.image.url, cJSON_GetObjectItem(item, "url")->valuestring);
-        if(cJSON_GetObjectItem(item, "path")->type != 2)    strcpy(msg->message.image.path, cJSON_GetObjectItem(item, "path")->valuestring);
+        if(!cJSON_IsNull(cJSON_GetObjectItem(item, "url")))    strcpy(msg->message.image.url, cJSON_GetObjectItem(item, "url")->valuestring);
+        if(!cJSON_IsNull(cJSON_GetObjectItem(item, "path")))    strcpy(msg->message.image.path, cJSON_GetObjectItem(item, "path")->valuestring);
     }
     else if (strcmp(type->valuestring, "Xml") == 0 )
     {
@@ -1484,15 +1485,15 @@ qq_message* parse_qmessage(cJSON* root)
         {
             msg->type = QIMAGE;
             base64 = cJSON_GetObjectItem(item, "base64");
-            if (base64->type != 2) {
+            if (!cJSON_IsNull(base64)) {
                 msg->message.image.length = strlen(cJSON_GetObjectItem(item, "base64")->valuestring) + 1;
                 msg->message.image.base64 = malloc(msg->message.curr.length * sizeof(char));
                 if (msg->message.image.base64 == NULL) break;
                 strcpy(msg->message.image.base64, cJSON_GetObjectItem(item, "base64")->valuestring);
             }
             strcpy(msg->message.image.image_id, cJSON_GetObjectItem(item, "imageId")->valuestring);
-            if(cJSON_GetObjectItem(item, "url")->type != 2)    strcpy(msg->message.image.url, cJSON_GetObjectItem(item, "url")->valuestring);
-            if(cJSON_GetObjectItem(item, "path")->type != 2)    strcpy(msg->message.image.path, cJSON_GetObjectItem(item, "path")->valuestring);
+            if(!cJSON_IsNull(cJSON_GetObjectItem(item, "url")))    strcpy(msg->message.image.url, cJSON_GetObjectItem(item, "url")->valuestring);
+            if(!cJSON_IsNull(cJSON_GetObjectItem(item, "path")))    strcpy(msg->message.image.path, cJSON_GetObjectItem(item, "path")->valuestring);
         }
         else if (strcmp(type->valuestring, "Xml") == 0 )
         {
